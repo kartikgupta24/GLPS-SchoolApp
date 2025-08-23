@@ -21,8 +21,6 @@ def get_db_connection():
 
 # --- Dummy login credentials ---
 USER_CREDENTIALS = {
-    #"admin": "admin123",
-    #"teacher": "teacher123"
     os.getenv("DB_USER_admin"): os.getenv("DB_PWD_admin"),
     os.getenv("DB_USER_teacher"): os.getenv("DB_PWD_teacher")
 }
