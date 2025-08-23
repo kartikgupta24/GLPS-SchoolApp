@@ -3,13 +3,17 @@ from datetime import datetime
 import streamlit as st
 import pyodbc
 import pandas as pd
+import os
+from dotenv import load_dotenv
+# Load .env file
+load_dotenv(dotenv_path="config/.env")
 
 
 def get_db_connection():
     conn = pyodbc.connect(
         "DRIVER={ODBC Driver 17 for SQL Server};"
-        "SERVER=localhost\\SQLEXPRESS;"
-        "DATABASE=GLPS_DB;"
+        f"SERVER={os.getenv('DB_SERVER')};"
+        f"DATABASE={os.getenv('DB_NAME')};"
         "Trusted_Connection=yes;"
     )
     return conn
@@ -17,14 +21,17 @@ def get_db_connection():
 
 # --- Dummy login credentials ---
 USER_CREDENTIALS = {
-    "admin": "admin123",
-    "teacher": "teacher123"
+    #"admin": "admin123",
+    #"teacher": "teacher123"
+    os.getenv("DB_USER_admin"): os.getenv("DB_PWD_admin"),
+    os.getenv("DB_USER_teacher"): os.getenv("DB_PWD_teacher")
 }
 
 
 # Function for user authentication
 def login():
-    st.sidebar.markdown("""<h2 style ='text-align: left;'>🌿 Green Leaf Public School, Saharanpur</h2>""", unsafe_allow_html=True)
+    st.sidebar.markdown("""<h2 style ='text-align: left;'>🌿 Green Leaf Public School, Saharanpur</h2>""",
+                        unsafe_allow_html=True)
     st.sidebar.title("🔑 Login")
     username = st.sidebar.text_input("Username", key="username")
     password = st.sidebar.text_input("Password", type="password", key="password")
@@ -57,8 +64,9 @@ if not st.session_state["authenticated"]:
     login()
 else:
     # --- MAIN DASHBOARD AFTER LOGIN ---
-    st.sidebar.markdown("""<h2 style ='text-align: left;'>🌿 Green Leaf Public School, Saharanpur</h2>""", unsafe_allow_html=True)
-    #st.sidebar.divider()
+    st.sidebar.markdown("""<h2 style ='text-align: left;'>🌿 Green Leaf Public School, Saharanpur</h2>""",
+                        unsafe_allow_html=True)
+    # st.sidebar.divider()
     st.sidebar.button("Logout", on_click=logout)
     # Custom CSS for styling
     st.markdown("""
@@ -122,7 +130,7 @@ else:
         border-radius: 8px;'>🌿 Green Leaf Public School - Growing Minds, Growing Futures</h4>""",
         unsafe_allow_html=True
     )
-    #st.divider()
+    # st.divider()
     st.markdown('<div class="title">🏫 School Fee Management System</div>', unsafe_allow_html=True)
     # st.title("🏫 School Fee Management System")
     st.divider()
