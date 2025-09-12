@@ -14,7 +14,9 @@ def get_db_connection():
         "DRIVER={ODBC Driver 17 for SQL Server};"
         f"SERVER={os.getenv('DB_SERVER')};"
         f"DATABASE={os.getenv('DB_NAME')};"
-        "Trusted_Connection=yes;"
+        f"UID={os.getenv('DB_USER')};"
+        f"PWD={os.getenv('DB_PWD')}"
+        #"Trusted_Connection=yes;"
     )
     return conn
 
