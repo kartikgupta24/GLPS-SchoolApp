@@ -1,7 +1,8 @@
 from datetime import datetime
 
 import streamlit as st
-import pyodbc
+#import pyodbc
+import psycopg2
 import pandas as pd
 import os
 from dotenv import load_dotenv
@@ -10,15 +11,21 @@ load_dotenv(dotenv_path="config/.env")
 
 
 def get_db_connection():
-    conn = pyodbc.connect(
-        "DRIVER={ODBC Driver 17 for SQL Server};"
-        f"SERVER={os.getenv('DB_SERVER')};"
-        f"DATABASE={os.getenv('DB_NAME')};"
-        f"UID={os.getenv('DB_USER')};"
-        f"PWD={os.getenv('DB_PWD')}"
-        #"Trusted_Connection=yes;"
-    )
-    return conn
+    try:
+        conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+        return conn
+    except Exception as e:
+        print(f"Error connecting to the database: {e}")
+        return None
+    # conn = pyodbc.connect(
+    #     "DRIVER={ODBC Driver 17 for SQL Server};"
+    #     f"SERVER={os.getenv('DB_SERVER')};"
+    #     f"DATABASE={os.getenv('DB_NAME')};"
+    #     f"UID={os.getenv('DB_USER')};"
+    #     f"PWD={os.getenv('DB_PWD')}"
+    #     #"Trusted_Connection=yes;"
+    # )
+    # return conn
 
 
 # --- Dummy login credentials ---
@@ -149,7 +156,7 @@ else:
         cursor.execute("Select COUNT(*) from students")
         total_students = cursor.fetchone()[0]
 
-        cursor.execute("SELECT COUNT(*) FROM fees WHERE Balance_Due_Status IN ('Pending', 'Partially Paid')")
+        cursor.execute("SELECT COUNT(*) FROM fees WHERE \"Balance_Due_Status\" IN ('Pending', 'Partially Paid')")
         students_with_fees_due = cursor.fetchone()[0]
 
         st.markdown("## 📊 Dashboard Overview")
@@ -192,13 +199,18 @@ else:
                 annual_fees_payment_date = None
             submit_button = st.form_submit_button("Save")
             if submit_button:
+                #New code entered
+                if pending_annual_fees > 0:
+                    bal_due_status = "Pending"
+                elif pending_annual_fees == 0:
+                    bal_due_status = "Not Pending"
                 try:
                     conn = get_db_connection()
                     cursor = conn.cursor()
                     cursor.execute("""
-                    INSERT INTO students (student_name, gender, class, father_name, Mother_name, contact, student_address, addmission_date)
-                    OUTPUT INSERTED.student_id 
-                    VALUES(?,?,?,?,?,?,?,?);
+                    INSERT INTO students (student_name, gender, class, father_name, mother_name, contact, student_address, addmission_date)
+                    VALUES(%s,%s,%s,%s,%s,%s,%s,%s)
+                    RETURNING student_id;
                     """, (student_name, student_gender, student_class, father_name, mother_name, contact_number,
                           student_address, Admission_Date)
                                    )
@@ -209,11 +221,11 @@ else:
                         print(f"Student ID Retrieved: {student_id}")
                     else:
                         print("Error: Student ID is NULL")
-                    cursor.execute("""INSERT INTO fees (student_id, student_name, Father_name, class, month, year, total_fees, amount_paid, balance_due, payment_method, payment_date, Fee_type, admission_date)
-                            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""", (
+                    cursor.execute("""INSERT INTO fees (student_id, student_name, "Father_name", student_class, month, year, total_fees, amount_paid, balance_due, payment_method, payment_date, "Fee_type", admission_date,"Balance_Due_Status")
+                            VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""", (
                         student_id, student_name, father_name, student_class, admission_month, Admission_Date.year,
                         Annual_Fees, Annual_Fees_Paid, pending_annual_fees, payment_method, annual_fees_payment_date,
-                        "Annual Charges", Admission_Date))
+                        "Annual Charges", Admission_Date,bal_due_status))
                     conn.commit()
                     st.success("Student Details Saved Successfully")
                 except Exception as e:
@@ -241,7 +253,7 @@ else:
 
         # Step 2: Fetch Students for Selected Class
         if selected_class:
-            cursor.execute("SELECT student_id, student_name FROM students WHERE class = ?", (selected_class,))
+            cursor.execute("SELECT student_id, student_name FROM students WHERE class = %s", (selected_class,))
             students = cursor.fetchall()
 
             student_options = {str(s[0]): s[1] for s in students}
@@ -260,7 +272,7 @@ else:
             selected_student_name = None
         # Step 3: Fetch Father Names for Selected Student
         if selected_student_name:
-            cursor.execute("SELECT DISTINCT father_name FROM students WHERE student_name = ? AND class = ?",
+            cursor.execute("SELECT DISTINCT father_name FROM students WHERE student_name = %s AND class = %s",
                            (selected_student_name, selected_class))
             father_names = [row[0] for row in cursor.fetchall()]
 
@@ -271,7 +283,7 @@ else:
                 # Step 4: Identify Student Using Student Name + Father Name + Class
                 if selected_father_name:
                     cursor.execute(
-                        "SELECT student_id FROM students WHERE student_name = ? AND father_name = ? AND class = ?",
+                        "SELECT student_id FROM students WHERE student_name = %s AND father_name = %s AND class = %s",
                         (selected_student_name, selected_father_name, selected_class))
                     student_record = cursor.fetchone()
 
@@ -290,8 +302,10 @@ else:
             fees_type = st.selectbox("Choose Fees Type",
                                      ["Monthly Fees", "Annual Fees", "Exam-Quarterly Fees", "Exam-Half Yearly Fees",
                                       "Exam-Annual Fees"])
-            selected_student_admission_date = cursor.execute(
-                """SELECT addmission_date from students where student_id = ?""", (selected_student_id)).fetchone()
+            #selected_student_admission_date = 
+            cursor.execute(
+                """SELECT addmission_date from students where student_id = %s""", (selected_student_id,))
+            selected_student_admission_date = cursor.fetchone()    
             with st.form("Fee Detail Form", clear_on_submit=False):
                 if fees_type == "Monthly Fees":
                     month = st.selectbox("Month",
@@ -353,8 +367,8 @@ else:
 
                         else:
                             cursor.execute("""
-                            INSERT INTO fees (student_id, student_name, Father_name, class, month, year, total_fees, amount_paid, balance_due, payment_method, payment_date, Fee_type, admission_date, Balance_Due_Status)
-                            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                            INSERT INTO fees (student_id, student_name, "Father_name", student_class, month, year, total_fees, amount_paid, balance_due, payment_method, payment_date, "Fee_type", admission_date, "Balance_Due_Status")
+                            VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
                         """, (selected_student_id, selected_student_name, selected_father_name, selected_class, month,
                               year, total_fees, amount_paid, new_balance,
                               payment_method, payment_date, fees_type, selected_student_admission_date[0],
@@ -386,7 +400,7 @@ else:
 
         # Step 2: Fetch Students for Selected Class
         if selected_class:
-            cursor.execute("SELECT student_id, student_name FROM students WHERE class = ?", (selected_class,))
+            cursor.execute("SELECT student_id, student_name FROM students WHERE class = %s", (selected_class,))
             students = cursor.fetchall()
 
             student_options = {str(s[0]): s[1] for s in students}
@@ -405,7 +419,7 @@ else:
             selected_student_name = None
         # Step 3: Fetch Father Names for Selected Student
         if selected_student_name:
-            cursor.execute("SELECT DISTINCT father_name FROM students WHERE student_name = ? AND class = ?",
+            cursor.execute("SELECT DISTINCT father_name FROM students WHERE student_name = %s AND class = %s",
                            (selected_student_name, selected_class))
             father_names = [row[0] for row in cursor.fetchall()]
 
@@ -416,7 +430,7 @@ else:
                 # Step 4: Identify Student Using Student Name + Father Name + Class
                 if selected_father_name:
                     cursor.execute(
-                        "SELECT student_id FROM students WHERE student_name = ? AND father_name = ? AND class = ?",
+                        "SELECT student_id FROM students WHERE student_name = %s AND father_name = %s AND class = %s",
                         (selected_student_name, selected_father_name, selected_class))
                     student_record = cursor.fetchone()
 
@@ -433,8 +447,10 @@ else:
             fees_type = st.selectbox("Choose Pending Fees Type",
                                      ["Monthly Fees", "Annual Fees", "Exam-Quarterly Fees", "Exam-Half Yearly Fees",
                                       "Exam-Annual Fees"])
-            selected_student_admission_date = cursor.execute(
-                """SELECT addmission_date from students where student_id = ?""", (selected_student_id)).fetchone()
+            #selected_student_admission_date = 
+            cursor.execute(
+                """SELECT addmission_date from students where student_id = %s""", (selected_student_id,))
+            selected_student_admission_date = cursor.fetchone()
             if fees_type == "Monthly Fees":
                 month = st.selectbox("Month",
                                      ["All", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct",
@@ -481,16 +497,16 @@ else:
         )
         SELECT COALESCE(SUM(
             CASE 
-                WHEN f.Balance_Due_Status = 'Pending' THEN f.balance_due
-                WHEN f.Balance_Due_Status = 'Partially Paid' THEN COALESCE(lb.new_balance, f.balance_due)
+                WHEN f."Balance_Due_Status" = 'Pending' THEN f.balance_due
+                WHEN f."Balance_Due_Status" = 'Partially Paid' THEN COALESCE(lb.new_balance, f.balance_due)
                 ELSE 0
             END
         ), 0)
         FROM Fees f
         LEFT JOIN LatestBalance lb ON f.student_id = lb.student_id
-        WHERE f.class = ? AND f.student_id = ? AND f.father_name = ? 
-              AND f.month = ? AND f.year = ? AND f.fee_type = ? 
-              AND f.Balance_Due_Status IN ('Pending', 'Partially Paid')
+        WHERE f.student_class = %s AND f.student_id = %s AND f."Father_name" = %s 
+              AND f.month = %s AND f.year = %s AND f."Fee_type" = %s 
+              AND f."Balance_Due_Status" IN ('Pending', 'Partially Paid')
                     """,
                     (selected_class, selected_student_id, selected_father_name, month, year, fees_type)
                 )
@@ -517,16 +533,16 @@ else:
             )
             SELECT COALESCE(SUM(
                 CASE 
-                    WHEN f.Balance_Due_Status = 'Pending' THEN f.balance_due
-                    WHEN f.Balance_Due_Status = 'Partially Paid' THEN COALESCE(lb.new_balance, f.balance_due)
+                    WHEN f."Balance_Due_Status" = 'Pending' THEN f.balance_due
+                    WHEN f."Balance_Due_Status" = 'Partially Paid' THEN COALESCE(lb.new_balance, f.balance_due)
                     ELSE 0
                 END
             ), 0)
             FROM Fees f
             LEFT JOIN LatestBalance lb ON f.student_id = lb.student_id
-            WHERE f.class = ? AND f.student_id = ? AND f.father_name = ? 
-                   AND f.year = ? AND f.fee_type = ? 
-                  AND f.Balance_Due_Status IN ('Pending', 'Partially Paid')
+            WHERE f.student_class = %s AND f.student_id = %s AND f."Father_name" = %s 
+                   AND f.year = %s AND f."Fee_type" = %s 
+                  AND f."Balance_Due_Status" IN ('Pending', 'Partially Paid')
                     """,
                     (selected_class, selected_student_id, selected_father_name, year, fees_type)
                 )
@@ -544,13 +560,13 @@ else:
                 bal_due_status = "Partially Paid"
             if st.button("Save Payment"):
                 cursor.execute(
-                    "SELECT Fee_id from Fees where class = ? AND student_id = ? AND father_name = ? AND fee_type = ? AND month = ? AND year = ?",
+                    "SELECT \"Fee_id\" from Fees where student_class = %s AND student_id = %s AND father_name = %s AND fee_type = %s AND month = %s AND year = %s",
                     (selected_class, selected_student_id, selected_father_name, fees_type, month, year,))
                 result = cursor.fetchone()
                 fee_id = result[0] if result and result[0] is not None else 0
 
-                cursor.execute("""INSERT INTO pending_fees_balance_tbl(student_id,student_name,class,father_name,fee_type,pending_fees,pending_fees_amount_paid,new_balance,payment_method,payment_date,month,year,admission_date)
-                                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                cursor.execute("""INSERT INTO pending_fees_balance_tbl(student_id,student_name,student_class,father_name,fee_type,pending_fees,pending_fees_amount_paid,new_balance,payment_method,payment_date,month,year,admission_date)
+                                VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                                (selected_student_id, selected_student_name, selected_class, selected_father_name,
                                 fees_type, total_pending_fees, pending_amount_paid, new_balance, payment_method,
                                 payment_date, month, year, selected_student_admission_date[0]))
@@ -586,14 +602,14 @@ else:
         )
         SELECT COALESCE(SUM(
                 CASE 
-                    WHEN f.Balance_Due_Status = 'Pending' THEN f.balance_due
-                    WHEN f.Balance_Due_Status = 'Partially Paid' THEN COALESCE(lb.new_balance, f.balance_due)
+                    WHEN f."Balance_Due_Status" = 'Pending' THEN f.balance_due
+                    WHEN f."Balance_Due_Status" = 'Partially Paid' THEN COALESCE(lb.new_balance, f.balance_due)
                     ELSE 0
                 END
             ), 0) AS total_balance_due_overall
         FROM fees f
         LEFT JOIN LatestBalance lb ON f.student_id = lb.student_id
-        WHERE f.Balance_Due_Status IN ('Pending', 'Partially Paid')
+        WHERE f."Balance_Due_Status" IN ('Pending', 'Partially Paid')
             """)
         total_balance_due_overall = cursor.fetchone()[0]
 
@@ -604,7 +620,7 @@ else:
 
         # Fetch Students Based on Selected Class
         if selected_class != "All":
-            cursor.execute("SELECT student_id, student_name FROM students WHERE class = ?", (selected_class,))
+            cursor.execute("SELECT student_id, student_name FROM students WHERE class = %s", (selected_class,))
         else:
             cursor.execute("SELECT student_id, student_name FROM students")
 
@@ -632,7 +648,7 @@ else:
         # Fetch Father Names if Student is Selected
         selected_father = "All"
         if selected_student_id:
-            cursor.execute("SELECT DISTINCT father_name FROM students WHERE student_name = ? and class = ?",
+            cursor.execute("SELECT DISTINCT father_name FROM students WHERE student_name = %s and class = %s",
                            (selected_student_name, selected_class,))
             father_names = [row[0] for row in cursor.fetchall()]
             if father_names:
@@ -669,42 +685,42 @@ else:
             s.class, 
             COALESCE(SUM(
                 CASE 
-                    WHEN f.Balance_Due_Status = 'Pending' THEN f.balance_due
-                    WHEN f.Balance_Due_Status = 'Partially Paid' THEN COALESCE(lb.new_balance, 0)
+                    WHEN f."Balance_Due_Status" = 'Pending' THEN f.balance_due
+                    WHEN f."Balance_Due_Status" = 'Partially Paid' THEN COALESCE(lb.new_balance, 0)
                     ELSE 0
                 END
             ), 0) AS total_balance_due,
             COALESCE(MAX(CASE 
-            WHEN f.Balance_Due_Status = 'Pending' THEN f.payment_date  
-            WHEN f.Balance_Due_Status = 'Partially Paid' THEN lb.payment_date  
+            WHEN f."Balance_Due_Status" = 'Pending' THEN f.payment_date  
+            WHEN f."Balance_Due_Status" = 'Partially Paid' THEN lb.payment_date  
             ELSE NULL
         END), 'N/A') AS last_payment_date  
         FROM fees f 
         JOIN students s ON f.student_id = s.student_id
         LEFT JOIN latest_balance lb ON f.student_id = lb.student_id
         WHERE f.balance_due > 0 
-        AND f.Balance_Due_Status IN ('Pending', 'Partially Paid')
+        AND f."Balance_Due_Status" IN ('Pending', 'Partially Paid')
             """
         params = []
         # Apply Filters Carefully
         filter_conditions = []
         # Apply Filters
         if selected_class != "All":
-            filter_conditions.append("s.class = ?")
+            filter_conditions.append("s.class = %s")
             params.append(selected_class)
 
         if selected_student and selected_student != "All":
             # student_id = selected_student.split(" - ")[0]  # Extract student_id
             selected_student_name = selected_student.split(" - ")[1]  # Extract student name
-            filter_conditions.append("s.student_name = ?")
+            filter_conditions.append("s.student_name = %s")
             params.append(selected_student_name)
 
         if selected_father != "All":
-            filter_conditions.append("s.father_name = ?")
+            filter_conditions.append("s.father_name = %s")
             params.append(selected_father)
 
         if selected_year != "All":
-            filter_conditions.append("f.year = ?")
+            filter_conditions.append("f.year = %s")
             params.append(selected_year)
 
         # Append filters correctly
@@ -769,14 +785,14 @@ else:
                 s.student_name, 
                 s.father_name, 
                 s.class, 
-                f.fee_type, 
+                f."Fee_type", 
                 f.month, 
                 f.year, 
                 f.total_fees, 
                 f.amount_paid,
                 CASE 
-                    WHEN f.Balance_Due_Status = 'Pending' THEN f.balance_due
-                    WHEN f.Balance_Due_Status = 'Partially Paid' THEN COALESCE(lb.new_balance, 0)
+                    WHEN f."Balance_Due_Status" = 'Pending' THEN f.balance_due
+                    WHEN f."Balance_Due_Status" = 'Partially Paid' THEN COALESCE(lb.new_balance, 0)
                     ELSE 0
                 END AS balance_due
             FROM fees f 
@@ -784,15 +800,15 @@ else:
             LEFT JOIN latest_balance lb 
                 ON f.student_id = lb.student_id 
                 AND f.month = lb.month 
-                AND f.year = lb.year
+                AND f.year = lb.year::integer
             WHERE f.balance_due > 0 
-            AND s.student_name = ?
+            AND s.student_name = %s
                                     """
                     params = [selected_student_name]
 
                     # Apply father name filter only if a specific father is selected
                     if selected_father != "All":
-                        query += " AND s.father_name = ?"
+                        query += " AND s.father_name = %s"
                         params.append(selected_father)
 
                     cursor.execute(query, params)
@@ -812,11 +828,11 @@ else:
         elif view_options == "Pending Fees Payment History":
             st.subheader("📜 Payment History of Cleared/Partially Paid Fees")
             history_query = """
-                    SELECT pfb.student_id, s.student_name, s.father_name, s.class, pfb.Fee_type, pfb.month, pfb.year,
+                    SELECT pfb.student_id, s.student_name, s.father_name, s.class, pfb."Fee_type", pfb.month, pfb.year,
                            pfb.pending_fees, pfb.pending_fees_amount_paid, pfb.new_balance, pfb.payment_method, pfb.payment_date
                     FROM pending_fees_balance_tbl pfb 
                     JOIN students s ON pfb.student_id = s.student_id
-                    WHERE s.student_name = ? AND s.class = ? AND s.father_name = ? AND pfb.year = ?
+                    WHERE s.student_name = %s AND s.class = %s AND s.father_name = %s AND pfb.year = %s
                 """
             history_params = [selected_student_name, selected_class, selected_father, selected_year]
 
