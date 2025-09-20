@@ -12,11 +12,23 @@ load_dotenv(dotenv_path="config/.env")
 
 def get_db_connection():
     try:
-        conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+        conn = psycopg2.connect(
+            host=os.getenv('DB_HOST'),
+            database=os.getenv('DB_NAME'),
+            user=os.getenv('DB_USER'),
+            password=os.getenv('DB_PASSWORD'),
+            port=os.getenv('DB_PORT')
+        )
         return conn
     except Exception as e:
         print(f"Error connecting to the database: {e}")
         return None
+    # try:
+    #     conn = psycopg2.connect(os.getenv("DATABASE_URL"))
+    #     return conn
+    # except Exception as e:
+    #     print(f"Error connecting to the database: {e}")
+    #     return None
     # conn = pyodbc.connect(
     #     "DRIVER={ODBC Driver 17 for SQL Server};"
     #     f"SERVER={os.getenv('DB_SERVER')};"
