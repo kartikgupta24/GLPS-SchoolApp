@@ -9,7 +9,11 @@ from dotenv import load_dotenv
 # Load .env file
 load_dotenv(dotenv_path="config/.env")
 
-
+print(os.getenv('DB_HOST'))
+print(os.getenv('DB_NAME'))
+print(os.getenv('DB_USER'))
+print(os.getenv('DB_PASSWORD'))
+print(os.getenv('DB_PORT'))
 def get_db_connection():
     try:
         conn = psycopg2.connect(
