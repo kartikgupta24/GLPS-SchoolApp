@@ -1,3 +1,4 @@
 streamlit==1.48.1
 pyodbc
 python-dotenv
+psycopg2-binary
