@@ -222,8 +222,9 @@ else:
                 elif pending_annual_fees == 0:
                     bal_due_status = "Not Pending"
                 try:
-                    conn = get_db_connection()
-                    cursor = conn.cursor()
+                    #conn = get_db_connection()
+                    #cursor = conn.cursor()
+                    conn, cursor = get_db_connection()
                     cursor.execute("""
                     INSERT INTO students (student_name, gender, class, father_name, mother_name, contact, student_address, addmission_date)
                     VALUES(%s,%s,%s,%s,%s,%s,%s,%s)
@@ -253,8 +254,9 @@ else:
     if page == "Add Fee Payment Details":
         st.header("Add Fee Payment")
         try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
+            # conn = get_db_connection()
+            # cursor = conn.cursor()
+            conn, cursor = get_db_connection()
         except Exception as e:
             st.error(f"Error: {e}")
 
@@ -400,8 +402,9 @@ else:
     if page == "Submit Pending Fees":
         st.header("Pending Fees Payment")
         try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
+            # conn = get_db_connection()
+            # cursor = conn.cursor()
+            conn, cursor = get_db_connection()
         except Exception as e:
             st.error(f"Error: {e}")
 
@@ -598,8 +601,9 @@ else:
     if page == "View Pending Fees Summary":
         st.header("📌 View Pending Fees Summary")
         try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
+            # conn = get_db_connection()
+            # cursor = conn.cursor()
+            conn, cursor = get_db_connection()
         except Exception as e:
             st.error(f"Error: {e}")
 
