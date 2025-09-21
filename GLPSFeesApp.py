@@ -24,10 +24,12 @@ def get_db_connection():
             port=os.getenv('DB_PORT'),
             sslmode="require"
         )
-        return conn
+        cursor = conn.cursor()
+        print("Database connection successful ✅")
+        return conn, cursor
     except Exception as e:
         print(f"Error connecting to the database: {e}")
-        return None
+        return None,None
     # try:
     #     conn = psycopg2.connect(os.getenv("DATABASE_URL"))
     #     return conn
@@ -164,17 +166,15 @@ else:
                              "View Pending Fees Summary"])
 
     if page == "Dashboard":
-        try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
-        except Exception as e:
-            st.error(f"Error: {e}")
-
-        cursor.execute("Select COUNT(*) from students")
-        total_students = cursor.fetchone()[0]
-
-        cursor.execute("SELECT COUNT(*) FROM fees WHERE \"Balance_Due_Status\" IN ('Pending', 'Partially Paid')")
-        students_with_fees_due = cursor.fetchone()[0]
+        conn, cursor = get_db_connection()
+        if conn is None or cursor is None:
+            st.error("Database connection failed")
+        else:
+            cursor.execute("Select COUNT(*) from students")
+            total_students = cursor.fetchone()[0]
+    
+            cursor.execute("SELECT COUNT(*) FROM fees WHERE \"Balance_Due_Status\" IN ('Pending', 'Partially Paid')")
+            students_with_fees_due = cursor.fetchone()[0]
 
         st.markdown("## 📊 Dashboard Overview")
         st.markdown("---")
